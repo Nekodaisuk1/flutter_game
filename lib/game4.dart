@@ -28,12 +28,16 @@ class _CatchGamePageState extends State<CatchGamePage> {
   late int basketCol;
   late bool movingRight;
   late int itemCol;
+  late double itemX; // ボールの横位置（-1.0 ~ 1.0）
   late double itemY;
+  late double itemVx; // 横方向の速度
   late double itemVy;
   late double gravity;
   late int score;
   late int miss;
   late bool isGameOver;
+  late bool isCurveBall; // 変化球かどうか
+  late double curveDirection; // 変化の方向（-1 or 1）
 
   late Timer timer;
   final Random rand = Random();
@@ -48,12 +52,16 @@ class _CatchGamePageState extends State<CatchGamePage> {
     basketCol = 1; // 中央カラム（少し左寄り）
     movingRight = true;
     itemCol = rand.nextInt(cols);
+    itemX = colX[itemCol]; // 初期位置
     itemY = 0.0;
+    itemVx = 0.0;
     itemVy = 0.0;
     gravity = 0.8;
     score = 0;
     miss = 0; // ミスの回数
     isGameOver = false; // ゲームオーバーかどうか
+    isCurveBall = rand.nextDouble() < 0.3; // 30%の確率で変化球
+    curveDirection = rand.nextBool() ? 1.0 : -1.0; // 左右どちらに曲がるか
     timer = Timer.periodic(const Duration(milliseconds: 16), _update);
   }
 
@@ -77,8 +85,20 @@ class _CatchGamePageState extends State<CatchGamePage> {
       // 重力落下
       itemVy += gravity * dt;
       itemY += itemVy * dt;
+      
+      // 変化球の場合、横方向に動く
+      if (isCurveBall && itemY > 0.3) {
+        itemVx += curveDirection * 0.8 * dt; // 横方向の加速度
+        itemX += itemVx * dt;
+        // 画面外に出ないように制限
+        itemX = itemX.clamp(-0.9, 0.9);
+      }
+      
       if (itemY >= 1.0) {
-        final caught = (itemCol == basketCol);
+        // 位置ベースで判定（変化球があるため）
+        final ballPos = itemX;
+        final basketPos = colX[basketCol];
+        final caught = (ballPos - basketPos).abs() < 0.3; // 範囲内ならキャッチ
         _resetItem(caught);
       }
     });
@@ -95,10 +115,14 @@ class _CatchGamePageState extends State<CatchGamePage> {
         return;
       }
     }
-    // 次のりんごを一番上から落とす
+    // 次のボールを一番上から落とす
     itemY = 0.0;
     itemVy = 0.0;
+    itemVx = 0.0;
     itemCol = rand.nextInt(cols);
+    itemX = colX[itemCol]; // 初期位置をレーンに合わせる
+    isCurveBall = rand.nextDouble() < 0.3; // 30%の確率で変化球
+    curveDirection = rand.nextBool() ? 1.0 : -1.0; // 左右どちらに曲がるか
   }
 
   void _gameOver() {
@@ -147,7 +171,7 @@ class _CatchGamePageState extends State<CatchGamePage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '🍎 収穫ゲーム 🍎',
+                    '⚾ 野球キャッチゲーム ⚾',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   Text('スコア：$score  ミス：$miss / $maxMiss'),
@@ -162,21 +186,24 @@ class _CatchGamePageState extends State<CatchGamePage> {
                     ),
                     child: Stack(
                       children: [
-                        // 落ちてくるリンゴ（アニメーション）
+                        // 落ちてくるボール（アニメーション）
                         Align(
                           alignment: Alignment(
-                            colX[itemCol],      // 左右位置
+                            itemX,              // 左右位置（変化球対応）
                             -0.8 + itemY * 1.4, // 上から落下
                           ),
-                          child: const Text('🍎', style: TextStyle(fontSize: 32)),
+                          child: Text(
+                            isCurveBall ? '⚾💨' : '⚾', 
+                            style: const TextStyle(fontSize: 32),
+                          ),
                         ),
-                        // カゴ
+                        // グローブ
                         Align(
                           alignment: Alignment(
                             colX[basketCol], // 左右位置
                             0.7, // 下側
                           ),
-                          child: const Text('🧺', style: TextStyle(fontSize: 32)),
+                          child: const Text('🧤', style: TextStyle(fontSize: 32)),
                         ),
                       ],
                     ),
